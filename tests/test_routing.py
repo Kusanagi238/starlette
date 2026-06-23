@@ -40,7 +40,7 @@ def disable_user(request):
 
 
 def user_no_match(request):  # pragma: no cover
-    content = "User fixed no match"
+    content = "User nomatch"
     return Response(content, media_type="text/plain")
 
 
@@ -564,11 +564,13 @@ def test_url_for_with_root_path(test_client_factory):
         app, base_url="https://www.example.org/", root_path="/sub_path"
     )
     response = client.get("/")
+    assert response.status_code == 200
     assert response.json() == {
         "index": "https://www.example.org/sub_path/",
         "submount": "https://www.example.org/sub_path/submount/",
     }
     response = client.get("/submount/")
+    assert response.status_code == 200
     assert response.json() == {
         "index": "https://www.example.org/sub_path/",
         "submount": "https://www.example.org/sub_path/submount/",
@@ -885,19 +887,15 @@ def test_duplicated_param_names():
 
 
 class Endpoint:
-    async def my_method(self, request):
-        ...  # pragma: no cover
+    async def my_method(self, request): ...  # pragma: no cover
 
     @classmethod
-    async def my_classmethod(cls, request):
-        ...  # pragma: no cover
+    async def my_classmethod(cls, request): ...  # pragma: no cover
 
     @staticmethod
-    async def my_staticmethod(request):
-        ...  # pragma: no cover
+    async def my_staticmethod(request): ...  # pragma: no cover
 
-    def __call__(self, request):
-        ...  # pragma: no cover
+    def __call__(self, request): ...  # pragma: no cover
 
 
 @pytest.mark.parametrize(
@@ -1050,7 +1048,8 @@ def test_exception_on_mounted_apps(test_client_factory):
 
     client = test_client_factory(app)
     with pytest.raises(Exception) as ctx:
-        client.get("/sub/")
+        with test_client_factory(app) as client:
+            client.get("/sub/")
     assert str(ctx.value) == "Exc"
 
 
@@ -1110,7 +1109,7 @@ def test_mounted_middleware_does_not_catch_exception(
 
 
 def test_websocket_route_middleware(
-    test_client_factory: typing.Callable[..., TestClient]
+    test_client_factory: typing.Callable[..., TestClient],
 ):
     async def websocket_endpoint(session: WebSocket):
         await session.accept()
@@ -1226,8 +1225,7 @@ def test_decorator_deprecations() -> None:
 
     with pytest.deprecated_call():
 
-        async def startup() -> None:
-            ...  # pragma: nocover
+        async def startup() -> None: ...  # pragma: nocover
 
         router.on_event("startup")(startup)
 

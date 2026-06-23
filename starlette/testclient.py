@@ -17,7 +17,6 @@ from anyio.streams.stapled import StapledObjectStream
 
 from starlette._utils import is_async_callable
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
-from starlette.websockets import WebSocketDisconnect
 
 try:
     import httpx
@@ -131,10 +130,13 @@ class WebSocketTestSession:
         self._send_queue.put(message)
 
     def _raise_on_close(self, message: Message) -> None:
-        if message["type"] == "websocket.close":
-            raise WebSocketDisconnect(
-                message.get("code", 1000), message.get("reason", "")
-            )
+        # Treat both 'websocket.close' and 'websocket.disconnect' as remote close events.
+        if message["type"] in ("websocket.close", "websocket.disconnect"):
+            # Record close information for callers to inspect instead of raising immediately.
+            self._closed = True
+            self.close_code = message.get("code", 1000)
+            self.close_reason = message.get("reason", "")
+            return
 
     def send(self, message: Message) -> None:
         self._receive_queue.put(message)
@@ -154,7 +156,7 @@ class WebSocketTestSession:
             self.send({"type": "websocket.receive", "bytes": text.encode("utf-8")})
 
     def close(self, code: int = 1000, reason: typing.Union[str, None] = None) -> None:
-        self.send({"type": "websocket.disconnect", "code": code, "reason": reason})
+        self.send({"type": "websocket.close", "code": code, "reason": reason})
 
     def receive(self) -> Message:
         message = self._send_queue.get()
@@ -423,9 +425,9 @@ class TestClient(httpx.Client):
         follow_redirects: typing.Optional[bool],
         allow_redirects: typing.Optional[bool],
     ) -> typing.Union[bool, httpx._client.UseClientDefault]:
-        redirect: typing.Union[
-            bool, httpx._client.UseClientDefault
-        ] = httpx._client.USE_CLIENT_DEFAULT
+        redirect: typing.Union[bool, httpx._client.UseClientDefault] = (
+            httpx._client.USE_CLIENT_DEFAULT
+        )
         if allow_redirects is not None:
             message = (
                 "The `allow_redirects` argument is deprecated. "
